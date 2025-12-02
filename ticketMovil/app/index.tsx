@@ -39,6 +39,7 @@ export default function HomeScreen() {
 
   const handlePressEvent = (eventId: string) => {
     console.log("Navegando al evento:", eventId);
+    router.push(`/event/${eventId}`);
   };
 
   return (
@@ -93,14 +94,17 @@ export default function HomeScreen() {
           <FlatList
             data={filteredEvents}
             keyExtractor={(item: any) => item.id || item._id || item.event_id}
-            renderItem={({ item }) => (
+            renderItem={({ item }) => {
+              const realId = item.id || item._id || item.event_id;
+              return (
               <EventCard 
                 title={item.name} 
                 date={item.date ? new Date(item.date).toLocaleDateString() : 'Fecha por confirmar'} 
                 imageUrl={item.image}
-                onPress={() => handlePressEvent(item.id || item.event_id)}
+                onPress={() => handlePressEvent(realId)}
               />
-            )}
+              );
+            }}
             ListEmptyComponent={
               <View className="items-center mt-10 opacity-60">
                  <Text className="text-xl font-bold text-ticket-muted">No se encontraron eventos</Text>
