@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, SafeAreaView, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
-import { api } from '../../api'; // Ajusta la ruta si es necesario (../../api o ../api)
+import { api } from '../../api'; 
 
 const MAX_PER_PERSON = 5;
 

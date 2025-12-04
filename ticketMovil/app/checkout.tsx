@@ -1,95 +1,64 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { 
+  View, Text, TextInput, TouchableOpacity, ScrollView, Alert, 
+  ActivityIndicator, SafeAreaView, KeyboardAvoidingView, Platform, StatusBar 
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 
-// 10 minutos en milisegundos
 const RESERVE_WINDOW_MS = 10 * 60 * 1000; 
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  // Recibimos el ID de la reserva por la URL
   const { reservationId } = useLocalSearchParams();
 
+  // Estados
   const [reservation, setReservation] = useState<any>(null);
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  
-  // Estado del contador
   const [remainingMs, setRemainingMs] = useState(RESERVE_WINDOW_MS);
   const [expired, setExpired] = useState(false);
 
-  // 1. Cargar la reserva desde la API usando el ID
-  // (Simplifiqué la lógica de sessionStorage de tu web, aquí confiamos en la API)
+  // Cargar datos
   useEffect(() => {
     let mounted = true;
-    if (!reservationId) return;
-
-    // Simulamos un tiempo de expiración local (10 min desde que carga la pantalla)
-    // En una app real, el backend debería decirte cuándo expira.
-    const expiresAt = Date.now() + RESERVE_WINDOW_MS;
-
-    (async () => {
-      try {
-        // Nota: Asumo que tienes un endpoint para obtener una reserva específica.
-        // Si no lo tienes, usamos los datos que pasamos (si fuera necesario).
-        // Por ahora, simularemos que la reserva es válida si tenemos el ID.
-        setReservation({
-           reservation_id: reservationId,
-           // Estos datos deberían venir del backend idealmente
-           status: 'PENDING',
-           expires_at: expiresAt
-        });
-      } catch (e) {
-        Alert.alert("Error", "No se encontró la reserva");
-        router.back();
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-
+    if (mounted) {
+      setReservation({
+         reservation_id: reservationId,
+         status: 'PENDING',
+         expires_at: Date.now() + RESERVE_WINDOW_MS
+      });
+      setLoading(false);
+    }
     return () => { mounted = false; };
   }, [reservationId]);
 
-  // 2. Contador de tiempo (Timer)
+  // Temporizador
   useEffect(() => {
     if (!reservation) return;
-    
     const interval = setInterval(() => {
-      const now = Date.now();
-      const expires = reservation.expires_at;
-      const left = Math.max(0, expires - now);
-      
+      const left = Math.max(0, reservation.expires_at - Date.now());
       setRemainingMs(left);
       if (left <= 0) {
         setExpired(true);
         clearInterval(interval);
       }
     }, 1000);
-
     return () => clearInterval(interval);
   }, [reservation]);
 
-  // Formato MM:SS
   const formatTime = (ms: number) => {
     const s = Math.floor(ms / 1000);
-    const mm = String(Math.floor(s / 60)).padStart(2, "0");
-    const ss = String(s % 60).padStart(2, "0");
-    return `${mm}:${ss}`;
+    return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   };
 
-  // 3. Confirmar Compra
+  // Confirmar Compra
   const handleConfirmPurchase = async () => {
-    if (expired) {
-      Alert.alert("Expirado", "El tiempo de reserva ha terminado.");
-      return;
-    }
-    if (!buyerName.trim() || !buyerEmail.trim()) {
-      Alert.alert("Faltan datos", "Por favor completa tu nombre y correo.");
-      return;
-    }
+    if (expired) { Alert.alert("Expirado", "El tiempo ha terminado."); return; }
+    if (!buyerName.trim() || !buyerEmail.trim()) { Alert.alert("Faltan datos", "Completa nombre y correo."); return; }
 
     setProcessing(true);
     try {
@@ -99,13 +68,21 @@ export default function CheckoutScreen() {
         payment_method: "card_simulated",
       };
 
-      await api.checkout(payload);
+      const response = await api.checkout(payload);
+      const purchaseData = response.purchase || response || {};
       
-      // Éxito: Navegar al historial o pantalla de éxito
+      if (!purchaseData.date) purchaseData.date = new Date().toISOString();
+      if (!purchaseData.items) purchaseData.items = reservation?.items || [{type:'General', quantity:1}];
+
+      try {
+        const existing = await AsyncStorage.getItem('purchases:local');
+        const purchases = existing ? JSON.parse(existing) : [];
+        purchases.unshift(purchaseData);
+        await AsyncStorage.setItem('purchases:local', JSON.stringify(purchases));
+      } catch (storageError) { console.error(storageError); }
+
       Alert.alert("¡Éxito!", "Compra realizada correctamente.");
-      
-      // Usamos replace para que no pueda volver atrás al checkout
-      router.replace("/"); 
+      router.replace("/");
       
     } catch (e: any) {
       Alert.alert("Error", e.message || "No se pudo procesar el pago.");
@@ -114,80 +91,62 @@ export default function CheckoutScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-ticket-bg">
-        <ActivityIndicator size="large" color="#0056FF" />
-      </View>
-    );
-  }
+  if (loading) return <View className="flex-1 bg-ticket-bg" />;
+
+  const topPadding = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 0;
 
   return (
-    <SafeAreaView className="flex-1 bg-ticket-bg">
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
-      >
-        <ScrollView className="flex-1 p-5">
+    <SafeAreaView className="flex-1 bg-ticket-bg" style={{ paddingTop: topPadding }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
+        <ScrollView className="flex-1 px-5 pt-2" showsVerticalScrollIndicator={false}>
           
-          <Text className="text-3xl font-extrabold text-ticket-primary mb-6">Checkout</Text>
+          {/* Cabecera con Botón Volver */}
+          <View className="flex-row items-center mb-6">
+            <TouchableOpacity onPress={() => router.back()} className="mr-3 bg-white p-2 rounded-full border border-gray-200">
+              <Text className="text-ticket-primary font-bold">←</Text>
+            </TouchableOpacity>
+            <Text className="text-3xl font-extrabold text-ticket-primary">Finalizar Compra</Text>
+          </View>
 
-          {/* Tarjeta de Estado */}
+          {/* Info Reserva */}
           <View className="bg-white p-5 rounded-2xl border border-ticket-line shadow-sm mb-6">
-            <Text className="text-ticket-muted text-sm mb-1">ID Reserva</Text>
-            <Text className="text-ticket-ink font-bold mb-4">{reservationId}</Text>
-
-            <View className={`self-start px-3 py-1 rounded-full ${expired ? 'bg-red-100' : 'bg-blue-50'}`}>
+            <Text className="text-ticket-muted text-sm font-medium">Reserva ID</Text>
+            <Text className="text-ticket-ink text-lg font-bold mb-2">#{String(reservationId).slice(-6)}</Text>
+            
+            <View className={`self-start px-4 py-2 rounded-full ${expired ? 'bg-red-100' : 'bg-blue-50'}`}>
               <Text className={`font-bold ${expired ? 'text-red-600' : 'text-ticket-primary'}`}>
-                {expired ? "Tiempo Expirado" : `Tiempo restante: ${formatTime(remainingMs)}`}
+                {expired ? "Tiempo Expirado" : `Expira en: ${formatTime(remainingMs)}`}
               </Text>
             </View>
           </View>
 
           {/* Formulario */}
           <View className="bg-white p-5 rounded-2xl border border-ticket-line shadow-sm mb-8">
-            <Text className="text-xl font-bold text-ticket-ink mb-4">Tus Datos</Text>
+            <Text className="text-xl font-bold text-ticket-ink mb-4">Datos del Comprador</Text>
             
             <View className="mb-4">
-              <Text className="text-ticket-muted mb-2 font-medium">Nombre Completo</Text>
+              <Text className="text-ticket-muted mb-1 ml-1 font-medium">Nombre Completo</Text>
               <TextInput 
-                value={buyerName}
-                onChangeText={setBuyerName}
-                placeholder="Ej: Juan Pérez"
-                className="bg-ticket-bg border border-ticket-line rounded-xl p-4 text-ticket-ink"
-                editable={!expired}
+                value={buyerName} onChangeText={setBuyerName} placeholder="Ej: Ernesto Pérez" 
+                className="bg-ticket-bg border border-ticket-line rounded-xl p-4 text-ticket-ink font-medium"
               />
             </View>
-
-            <View className="mb-2">
-              <Text className="text-ticket-muted mb-2 font-medium">Correo Electrónico</Text>
+            <View>
+              <Text className="text-ticket-muted mb-1 ml-1 font-medium">Correo</Text>
               <TextInput 
-                value={buyerEmail}
-                onChangeText={setBuyerEmail}
-                placeholder="juan@correo.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                className="bg-ticket-bg border border-ticket-line rounded-xl p-4 text-ticket-ink"
-                editable={!expired}
+                value={buyerEmail} onChangeText={setBuyerEmail} placeholder="correo@ejemplo.com" keyboardType="email-address"
+                className="bg-ticket-bg border border-ticket-line rounded-xl p-4 text-ticket-ink font-medium"
               />
             </View>
           </View>
 
-          {/* Botón de Pago */}
           <TouchableOpacity 
-            onPress={handleConfirmPurchase}
-            disabled={processing || expired}
-            className={`py-4 rounded-xl shadow-md ${expired ? 'bg-gray-400' : 'bg-ticket-primary'}`}
+            onPress={handleConfirmPurchase} disabled={processing || expired}
+            className={`py-4 rounded-xl shadow-md mb-10 ${expired ? 'bg-gray-400' : 'bg-ticket-primary'}`}
           >
-            {processing ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text className="text-white font-bold text-lg text-center">
-                {expired ? "Reserva Vencida" : "Confirmar Compra"}
-              </Text>
-            )}
+            {processing ? <ActivityIndicator color="white" /> : 
+              <Text className="text-white font-bold text-lg text-center">Confirmar Pago</Text>}
           </TouchableOpacity>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

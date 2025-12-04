@@ -53,7 +53,8 @@ export default function HomeScreen() {
             <Text className="text-2xl font-extrabold text-ticket-primary tracking-tight">Tickets Blue</Text>
         </View>
         {/* Botón Mis Compras*/}
-        <TouchableOpacity className="bg-ticket-primary px-5 py-2.5 rounded-xl shadow-sm">
+        <TouchableOpacity onPress={() => router.push('/purchases' as any)} 
+        className="bg-ticket-primary px-5 py-2.5 rounded-xl shadow-sm">
             <Text className="text-white font-bold text-sm">Mis compras</Text>
         </TouchableOpacity>
       </View>
