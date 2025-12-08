@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, SafeAreaView, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
-import { api } from '../../api'; 
+import { api } from '../../api';
 
 const MAX_PER_PERSON = 5;
 
@@ -100,7 +100,9 @@ export default function EventDetailScreen() {
           <View className="flex-row justify-between items-start mb-2">
             <View className="flex-1 mr-4">
                <Text className="text-2xl font-extrabold text-ticket-ink mb-1">{event.name}</Text>
-               <Text className="text-ticket-primary font-bold">{event.category || 'Concierto'}</Text>
+              <Text className="text-ticket-primary font-bold">
+                {String(event.category || 'Concierto').toUpperCase()}
+              </Text>
             </View>
             <View className="bg-white px-3 py-1 rounded-lg border border-ticket-line">
               <Text className="text-xs font-bold text-ticket-muted">
@@ -115,10 +117,10 @@ export default function EventDetailScreen() {
           {/* Detalles (Ubicación y Fecha) */}
           <View className="mt-4 space-y-2">
             <Text className="text-ticket-muted text-base">
-              📍 {event.location || 'Ubicación por confirmar'}
+              {event.location || 'Ubicación por confirmar'}
             </Text>
             <Text className="text-ticket-muted text-base">
-              📅 {event.date ? new Date(event.date).toLocaleString() : 'Fecha por confirmar'}
+              {event.date ? new Date(event.date).toLocaleString() : 'Fecha por confirmar'}
             </Text>
           </View>
 
@@ -133,7 +135,7 @@ export default function EventDetailScreen() {
       {/* Barra Inferior Flotante (Selección y Compra) */}
       <View className="bg-white p-5 border-t border-ticket-line shadow-lg pb-8">
         <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-lg font-bold text-ticket-ink">Entrada General</Text>
+          <Text className="text-lg font-bold text-ticket-ink">Entrada General {event.price ? `$${event.price}` : ''}</Text>
           
           {/* Selector de Cantidad (+ -) */}
           <View className="flex-row items-center bg-gray-100 rounded-xl p-1">
@@ -161,7 +163,7 @@ export default function EventDetailScreen() {
         <TouchableOpacity 
           onPress={handleReserve}
           disabled={reserving}
-          className={`bg-ticket-primary py-4 rounded-xl shadow-md flex-row justify-center items-center ${reserving ? 'opacity-70' : ''}`}
+          className={`bg-ticket-primary py-4 rounded-xl shadow-md flex-row justify-center items-center mb-4 ${reserving ? 'opacity-70' : ''}`}
         >
           {reserving ? (
             <ActivityIndicator color="white" />

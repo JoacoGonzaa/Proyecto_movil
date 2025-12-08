@@ -13,27 +13,28 @@ const EventCard = ({ title, date, imageUrl, onPress }: any) => {
         resizeMode="cover"
       />
       
-      <View className="p-5">
-        <Text className="text-xl font-extrabold text-ticket-ink mb-2" numberOfLines={2}>
+        <View className="flex-row items-start justify-between p-5">
+          <View className="flex-1">
+            <Text className="text-xl font-extrabold text-ticket-ink mb-2" numberOfLines={2}>
           {title}
-        </Text>
-        <Text className="text-sm text-ticket-muted mb-5 font-medium">
+            </Text>
+            <Text className="text-sm text-ticket-muted font-medium">
           {date}
-        </Text>
-        {/* Botón Ingresar */}
-        <TouchableOpacity 
-          onPress={onPress}
-          activeOpacity={0.8}
-          className="bg-ticket-primary py-3 px-6 rounded-xl self-start shadow-sm"
-          style={Platform.OS === 'android' ? { elevation: 2 } : {}} //sombra para android
-        > 
-          <Text className="text-white font-bold text-center text-base tracking-wide">
-            Ingresar
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
+            </Text>
+          </View>
+          <TouchableOpacity 
+            onPress={onPress}
+            activeOpacity={0.8}
+            className="bg-ticket-primary py-3 px-6 rounded-xl shadow-sm ml-3"
+            style={Platform.OS === 'android' ? { elevation: 2 } : {}}
+          > 
+            <Text className="text-white font-bold text-center text-base tracking-wide">
+          Ingresar
+            </Text>
+          </TouchableOpacity>
+        </View>
+          </View>
+        );
+      };
 
 export default EventCard;

@@ -47,7 +47,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#f2f5fa" />
       
       {/* Header */}
-      <View className={`px-5 py-4 bg-ticket-card shadow-sm flex-row justify-between items-center z-10 ${Platform.OS === 'android' ? 'mt-8 elevation-4' : ''}`}> 
+      <View className={`px-7 py-5 bg-ticket-card shadow-sm flex-row justify-between items-center z-10 ${Platform.OS === 'android' ? 'mt-10 elevation-4' : ''}`}> 
         <View>
             {/*Logo de texto con el color primario */}
             <Text className="text-2xl font-extrabold text-ticket-primary tracking-tight">Tickets Blue</Text>
@@ -59,11 +59,9 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View className="flex-1 px-5 pt-6">
+      <View className="flex-1 px-4 pt-1">
         {/*Título y Buscador*/}
-        <View className="mb-6">
-          <Text className="text-3xl font-extrabold text-ticket-primary mb-4">Eventos</Text>
-          
+        <View className="mb-6">          
           <View className="bg-ticket-card border border-ticket-line rounded-xl shadow-sm overflow-hidden">
             <TextInput
               placeholder="Buscar eventos..."
