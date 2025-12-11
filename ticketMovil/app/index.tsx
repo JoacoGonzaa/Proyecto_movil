@@ -9,37 +9,80 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // Estados para los datos
   const [events, setEvents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // Estado para el pull-to-refresh
   const [search, setSearch] = useState("");
 
-  const fetchEvents = async () => {
+  // Estados de carga y paginación
+  const [loadingInitial, setLoadingInitial] = useState(true); // Carga primera vez
+  const [loadingMore, setLoadingMore] = useState(false);    // Cargando más abajo
+  const [refreshing, setRefreshing] = useState(false);      // Pull to refresh
+  const [page, setPage] = useState(1);                      // Página actual
+  const [hasMore, setHasMore] = useState(true);             // ¿Quedan eventos?
+
+  // Función maestra para cargar eventos
+  const fetchEvents = async (pageToLoad: number, shouldRefresh = false) => {
     try {
-      const data = await api.getEvents();
-      // Aseguramos que data sea un array, a veces viene como { data: [...] }
-      const list = Array.isArray(data) ? data : (data.data || []);
+      // Si estamos refrescando o es la pag 1, permitimos cargar aunque hasMore sea false
+      if (!hasMore && !shouldRefresh && pageToLoad > 1) return;
+
+      const data = await api.getEvents(pageToLoad);
+      const newEvents = Array.isArray(data) ? data : (data.data || []);
       
-      // Ordenamos para que los nuevos salgan primero (si tienen fecha de creacion)
-      // O invertimos el array si la API manda los viejos primero
-      setEvents(list.reverse()); 
+      // Si vienen menos de 1 eventos asumimos que se acabaron
+      if (newEvents.length === 0) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+
+      if (shouldRefresh || pageToLoad === 1) {
+        // Si es refresh, reemplazamos todo
+        setEvents(newEvents);
+      } else {
+        // Si es paginación, agregamos al final (evitando duplicados por ID si la API es inestable)
+        setEvents(prevEvents => {
+            // Unimos arrays
+            const combined = [...prevEvents, ...newEvents];
+            // Filtramos duplicados por ID por seguridad
+            const unique = combined.filter((v, i, a) => a.findIndex(t => (t.id || t._id) === (v.id || v._id)) === i);
+            return unique;
+        });
+      }
     } catch (e) { 
-      console.error(e); 
+      console.error("Error cargando eventos:", e); 
     } finally { 
-      setLoading(false);
+      setLoadingInitial(false);
+      setLoadingMore(false);
       setRefreshing(false);
     }
   };
 
+  // Carga inicial
   useEffect(() => {
-    fetchEvents();
+    fetchEvents(1);
   }, []);
 
+  // Función al deslizar hacia abajo para recargar
   const onRefresh = () => {
     setRefreshing(true);
-    fetchEvents();
+    setPage(1);
+    setHasMore(true);
+    fetchEvents(1, true);
   };
 
+  // Función al llegar al final de la lista
+  const handleLoadMore = () => {
+    if (!loadingMore && !loadingInitial && hasMore && search === "") {
+      // Solo cargamos mas si NO estamos buscando (el buscador filtra localmente)
+      setLoadingMore(true);
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchEvents(nextPage);
+    }
+  };
+
+  // Filtrado local (Buscador)
   const filteredEvents = events.filter(ev => 
     ev.name && ev.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -67,7 +110,7 @@ export default function HomeScreen() {
              <View className="flex-row items-center mt-2">
                 <Feather name="calendar" size={14} color="gray" />
                 <Text className="text-gray-500 text-xs ml-2">
-                   {item.date ? new Date(item.date).toLocaleDateString() : 'Proximamente'}
+                   {item.date ? new Date(item.date).toLocaleDateString() : 'Próximamente'}
                 </Text>
              </View>
            </View>
@@ -75,10 +118,21 @@ export default function HomeScreen() {
      );
   };
 
+  const renderFooter = () => {
+    if (!loadingMore) return <View className="h-10" />; // Espacio vacío
+    return (
+        <View className="py-5 items-center">
+            <ActivityIndicator size="small" color="#0056FF" />
+            <Text className="text-gray-400 text-xs mt-2">Cargando más eventos...</Text>
+        </View>
+    );
+  };
+
   return (
     <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
       <StatusBar barStyle="dark-content" />
       
+      {/* Header */}
       <View className="px-5 py-4 flex-row justify-between items-center bg-white border-b border-gray-100"> 
         <Text className="text-2xl font-extrabold text-blue-600 tracking-tight">Tickets Blue</Text>
         <TouchableOpacity onPress={() => router.push('/purchases' as any)} className="bg-blue-600 px-4 py-2 rounded-full shadow-sm flex-row items-center">
@@ -87,14 +141,22 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View className="px-5 py-3">
-        <View className="bg-white flex-row items-center px-3 py-2 rounded-xl border border-gray-200">
+      {/* Buscador */}
+      <View className="px-5 py-4">
+        <View className="bg-white flex-row items-center px-4 py-3 rounded-xl border border-gray-200">
            <Feather name="search" size={20} color="gray" />
-           <TextInput placeholder="Buscar eventos..." className="flex-1 ml-3 text-base text-gray-800" value={search} onChangeText={setSearch} />
+           <TextInput 
+             placeholder="Buscar eventos..." 
+             placeholderTextColor="#9ca3af" 
+             className="flex-1 ml-3 text-base text-gray-800"
+             value={search}
+             onChangeText={setSearch}
+           />
         </View>
       </View>
 
-      {loading ? (
+      {/* Lista de Eventos */}
+      {loadingInitial ? (
         <ActivityIndicator size="large" color="#0056FF" className="mt-10" />
       ) : (
         <FlatList
@@ -102,10 +164,17 @@ export default function HomeScreen() {
           keyExtractor={(item) => String(item.id || item._id || item.event_id)}
           renderItem={renderEvent}
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-          // AQUI ESTA LA MAGIA PARA ACTUALIZAR:
+          
+          // Pull to Refresh
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0056FF']} />
           }
+          
+          // Infinite Scroll (Paginación)
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5} // Carga cuando falte la mitad de la pantalla para llegar al final
+          ListFooterComponent={renderFooter}
+          
           ListEmptyComponent={<Text className="text-center mt-10 text-gray-500">No se encontraron eventos</Text>}
         />
       )}

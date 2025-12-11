@@ -1,85 +1,83 @@
 // api/index.js
 
-// 1. Configuración de la URL Base
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+// Obtenemos la URL base desde las variables de entorno
+const ENV_URL = process.env.EXPO_PUBLIC_API_URL;
 
 async function request(endpoint, options = {}) {
-  // A. Construcción de la URL Completa
-  // Quita el slash final de la base URL si existe
-  const cleanBase = BASE_URL.replace(/\/$/, "");
-  // Quita el slash inicial del endpoint si existe
-  const cleanEndpoint = endpoint.replace(/^\//, "");
-  
-  // Une las partes con un solo slash
-  const url = `${cleanBase}/${cleanEndpoint}`;
-  
-  console.log(`📡 Fetching: ${url}`); // Log para depurar
-
-  // B. Configuración de Headers
-  const headers = {
-    "Content-Type": "application/json",
-    ...options.headers, // Permite agregar headers extra si fuera necesario
-  };
-
-  // C. Ejecutar Petición
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  // D. Procesar Respuesta
-  let body = null;
   try {
-    body = await res.json();
-  } catch (e) {
-    // Si la respuesta no es JSON (ej: error 500 del servidor o texto plano), body queda null
-    body = null;
-  }
+    // Aseguramos que el endpoint sea un string seguro
+    const safeEndpoint = endpoint || "";
 
-  // E. Manejo de Errores HTTP (404, 500, etc)
-  if (!res.ok) {
-    const err = new Error(`API error ${res.status}`);
-    err.status = res.status;
-    err.body = body;
-    throw err;
-  }
+    // Limpieza de barras diagonales para evitar duplicados (ej: //api)
+    const cleanBase = ENV_URL || "";
+    const cleanEndpoint = safeEndpoint.replace(/^\//, "");
+    
+    const url = `${cleanBase}/${cleanEndpoint}`;
+    
+    // Log para depuración en consola
+    console.log(`[API] Solicitando: ${url}`); 
 
-  return body ?? {};
+    // Configuración predeterminada de headers
+    const headers = {
+      "Content-Type": "application/json",
+      ...options.headers,
+    };
+
+    // Ejecución de la petición fetch
+    const res = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    // Intento de parseo de respuesta JSON
+    let body = null;
+    try {
+      body = await res.json();
+    } catch (e) {
+      // Si la respuesta no tiene cuerpo JSON (ej: un 204 No Content), body queda null
+      body = null;
+    }
+
+    // Manejo de errores HTTP (status fuera del rango 200-299)
+    if (!res.ok) {
+      console.error(`API Error ${res.status} en ${url}`);
+      const err = new Error(`API error ${res.status}`);
+      err.status = res.status;
+      err.body = body;
+      throw err;
+    }
+
+    // Retornamos un objeto vacío si body es null para evitar errores en el frontend
+    return body ?? {};
+
+  } catch (error) {
+    console.error("ERROR CRITICO EN REQUEST:", error);
+    throw error;
+  }
 }
 
-// 2. Exportamos los métodos de la API
+// Objeto principal con los métodos de la API
 export const api = {
-  // ===== Eventos =====
-  getEvents: () => request("/events"),
+  // Obtener lista de eventos con paginación
+  getEvents: (page = 1) => request(`/events?page=${page}`),
   
-  getEvent: (id) => request(`/events/${id}`),
+  // Obtener detalle de un evento específico
+  getEvent: (id) => {
+    if (!id) throw new Error("ID requerido");
+    return request(`/events/${id}`);
+  },
 
-  // ===== Reservas =====
+  // Crear una reserva (POST)
   createReservation: (data) =>
     request("/reservations", { method: "POST", body: JSON.stringify(data) }),
 
-  // ===== Checkout =====
+  // Cancelar una reserva (DELETE) 
+  cancelReservation: (id) => {
+    if (!id) throw new Error("ID de reserva requerido para cancelar");
+    return request(`/reservations/${id}`, { method: "DELETE" });
+  },
+
+  // Procesar el pago y finalizar compra (POST)
   checkout: (data) =>
     request("/checkout", { method: "POST", body: JSON.stringify(data) }),
-
-  // ===== Compras (Opcional si la API lo soporta en el futuro) =====
-  getPurchases: async () => {
-    // Intentamos varios endpoints comunes por si la API cambia
-    const candidates = [
-      "/purchases",
-      "/orders",
-      "/sales",
-    ];
-
-    for (const path of candidates) {
-      try {
-        return await request(path);
-      } catch (e) {
-        // Si da 404, probamos el siguiente. Si es otro error, fallamos.
-        if (e.status === 404) continue; 
-        throw e; 
-      }
-    }
-    return [];
-  },
 };
