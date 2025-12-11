@@ -1,121 +1,114 @@
-// app/index.tsx
+import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, SafeAreaView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, RefreshControl, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api';
-import EventCard from '../components/EventCard';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [events, setEvents] = useState([]);
-  const [search, setSearch] = useState('');
+  const insets = useSafeAreaInsets();
+
+  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false); // Estado para el pull-to-refresh
+  const [search, setSearch] = useState("");
+
+  const fetchEvents = async () => {
+    try {
+      const data = await api.getEvents();
+      // Aseguramos que data sea un array, a veces viene como { data: [...] }
+      const list = Array.isArray(data) ? data : (data.data || []);
+      
+      // Ordenamos para que los nuevos salgan primero (si tienen fecha de creacion)
+      // O invertimos el array si la API manda los viejos primero
+      setEvents(list.reverse()); 
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await api.getEvents();
-        const arr = Array.isArray(res) ? res : (res?.data || res?.results || []);
-        if (mounted) setEvents(arr);
-      } catch (e: any) {
-        setError(e?.message || "Error de conexión");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
+    fetchEvents();
   }, []);
 
-  const filteredEvents = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return events;
-    return events.filter((ev: any) => {
-      const text = `${ev?.name ?? ""} ${ev?.category ?? ""} ${ev?.location ?? ""}`.toLowerCase();
-      return text.includes(term);
-    });
-  }, [search, events]);
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchEvents();
+  };
+
+  const filteredEvents = events.filter(ev => 
+    ev.name && ev.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   const handlePressEvent = (eventId: string) => {
-    console.log("Navegando al evento:", eventId);
-    router.push(`/event/${eventId}`);
+    router.push(`/event/${eventId}` as any);
+  };
+
+  const renderEvent = ({ item }: { item: any }) => {
+     const realId = item.id || item._id || item.event_id;
+     return (
+        <TouchableOpacity 
+          onPress={() => handlePressEvent(realId)}
+          className="bg-white mb-5 rounded-2xl shadow-sm border border-gray-100 mx-5 overflow-hidden"
+          activeOpacity={0.9}
+        >
+           <Image 
+             source={{ uri: item.image || 'https://via.placeholder.com/800x400' }} 
+             className="w-full h-40 bg-gray-200"
+             resizeMode="cover"
+           />
+           <View className="p-4">
+             <Text className="text-xs font-bold text-blue-600 uppercase mb-1">{item.category || 'EVENTO'}</Text>
+             <Text className="text-lg font-extrabold text-gray-900 mb-1">{item.name}</Text>
+             <View className="flex-row items-center mt-2">
+                <Feather name="calendar" size={14} color="gray" />
+                <Text className="text-gray-500 text-xs ml-2">
+                   {item.date ? new Date(item.date).toLocaleDateString() : 'Proximamente'}
+                </Text>
+             </View>
+           </View>
+        </TouchableOpacity>
+     );
   };
 
   return (
-    <SafeAreaView className="flex-1">
-      <StatusBar barStyle="dark-content" backgroundColor="#f2f5fa" />
+    <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
+      <StatusBar barStyle="dark-content" />
       
-      {/* Header */}
-      <View className={`px-7 py-5 bg-ticket-card shadow-sm flex-row justify-between items-center z-10 ${Platform.OS === 'android' ? 'mt-10 elevation-4' : ''}`}> 
-        <View>
-            {/*Logo de texto con el color primario */}
-            <Text className="text-2xl font-extrabold text-ticket-primary tracking-tight">Tickets Blue</Text>
-        </View>
-        {/* Botón Mis Compras*/}
-        <TouchableOpacity onPress={() => router.push('/purchases' as any)} 
-        className="bg-ticket-primary px-5 py-2.5 rounded-xl shadow-sm">
-            <Text className="text-white font-bold text-sm">Mis compras</Text>
+      <View className="px-5 py-4 flex-row justify-between items-center bg-white border-b border-gray-100"> 
+        <Text className="text-2xl font-extrabold text-blue-600 tracking-tight">Tickets Blue</Text>
+        <TouchableOpacity onPress={() => router.push('/purchases' as any)} className="bg-blue-600 px-4 py-2 rounded-full shadow-sm flex-row items-center">
+            <Feather name="shopping-bag" size={16} color="white" style={{ marginRight: 6 }} />
+            <Text className="text-white font-bold text-xs uppercase">Mis compras</Text>
         </TouchableOpacity>
       </View>
 
-      <View className="flex-1 px-4 pt-1">
-        {/*Título y Buscador*/}
-        <View className="mb-6">          
-          <View className="bg-ticket-card border border-ticket-line rounded-xl shadow-sm overflow-hidden">
-            <TextInput
-              placeholder="Buscar eventos..."
-              placeholderTextColor="#9ca3af"
-              value={search}
-              onChangeText={setSearch}
-              className="p-4 text-ticket-ink text-base font-medium"
-              selectionColor="#0056FF" 
-            />
-          </View>
+      <View className="px-5 py-3">
+        <View className="bg-white flex-row items-center px-3 py-2 rounded-xl border border-gray-200">
+           <Feather name="search" size={20} color="gray" />
+           <TextInput placeholder="Buscar eventos..." className="flex-1 ml-3 text-base text-gray-800" value={search} onChangeText={setSearch} />
         </View>
-
-        {/* Estados de Carga y Error */}
-        {loading && (
-          <View className="flex-1 justify-center items-center">
-            <ActivityIndicator size="large" color="#0056FF" />
-            <Text className="text-ticket-muted mt-4 font-medium">Cargando los mejores eventos...</Text>
-          </View>
-        )}
-
-        {!loading && error && (
-           <View className="p-4 bg-red-50 border border-red-200 rounded-xl">
-             <Text className="text-red-700 font-medium">⚠ {error}</Text>
-           </View>
-        )}
-
-        {/* Lista de Eventos */}
-        {!loading && !error && (
-          <FlatList
-            data={filteredEvents}
-            keyExtractor={(item: any) => item.id || item._id || item.event_id}
-            renderItem={({ item }) => {
-              const realId = item.id || item._id || item.event_id;
-              return (
-              <EventCard 
-                title={item.name} 
-                date={item.date ? new Date(item.date).toLocaleDateString() : 'Fecha por confirmar'} 
-                imageUrl={item.image}
-                onPress={() => handlePressEvent(realId)}
-              />
-              );
-            }}
-            ListEmptyComponent={
-              <View className="items-center mt-10 opacity-60">
-                 <Text className="text-xl font-bold text-ticket-muted">No se encontraron eventos</Text>
-                 <Text className="text-ticket-muted mt-2">Intenta con otra búsqueda</Text>
-              </View>
-            }
-            showsVerticalScrollIndicator={false}
-            // Padding inferior para que el último elemento no quede pegado al borde
-            contentContainerStyle={{ paddingBottom: 30 }} 
-          />
-        )}
       </View>
-    </SafeAreaView>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#0056FF" className="mt-10" />
+      ) : (
+        <FlatList
+          data={filteredEvents}
+          keyExtractor={(item) => String(item.id || item._id || item.event_id)}
+          renderItem={renderEvent}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+          // AQUI ESTA LA MAGIA PARA ACTUALIZAR:
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0056FF']} />
+          }
+          ListEmptyComponent={<Text className="text-center mt-10 text-gray-500">No se encontraron eventos</Text>}
+        />
+      )}
+    </View>
   );
 }
